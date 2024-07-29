@@ -1,0 +1,16 @@
+{
+  "name": "knowledge-base-app",
+  "version": "1.0.0",
+  "description": "Knowledge Base App",
+  "main": "main.js",
+  "author": "Jack Lund",
+  "license": "MIT",
+  "packageManager": "yarn@4.3.1",
+  "devDependencies": {
+    "electron": "^31.3.0"
+  },
+  "scripts": {
+    "start": "electron .",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}
