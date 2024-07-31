@@ -1,8 +1,8 @@
-use crate::db::{table_id::TableId, DB};
+use crate::db::DB;
 use chrono::{DateTime, Utc};
 use std::fmt;
 use std::time::Duration;
-use surrealdb::sql::{Number, Value};
+use surrealdb::sql::{Id, Number, Thing, Value};
 use surrealdb::Result;
 
 #[derive(Debug)]
@@ -111,6 +111,50 @@ impl AttributeList {
 }
 
 #[derive(Debug)]
+pub struct TableId {
+    table_name: String,
+    id: Option<String>,
+}
+
+impl TableId {
+    pub fn new(table_name: &str) -> Self {
+        Self {
+            table_name: table_name.to_string(),
+            id: None,
+        }
+    }
+
+    pub fn table_name(&self) -> String {
+        self.table_name.clone()
+    }
+
+    pub fn id(&self) -> Option<String> {
+        self.id.clone()
+    }
+}
+
+impl From<Value> for TableId {
+    fn from(item: Value) -> Self {
+        match item {
+            Value::Thing(thing) => thing.into(),
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl From<Thing> for TableId {
+    fn from(thing: Thing) -> Self {
+        Self {
+            table_name: thing.tb,
+            id: match thing.id {
+                Id::String(id) => Some(id),
+                _ => unreachable!(),
+            },
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct GenericObject {
     id: TableId,
     attributes: AttributeList,
@@ -138,7 +182,7 @@ impl GenericObject {
         self
     }
 
-    fn add_kv_attribute(self, key: &str, value: AttributeValue) -> GenericObject {
+    pub fn add_kv_attribute(self, key: &str, value: AttributeValue) -> GenericObject {
         self.add_attribute(Attribute::new(key.to_string(), value))
     }
 
@@ -150,7 +194,7 @@ impl GenericObject {
         self.add_kv_attribute(key, AttributeValue::Int(value))
     }
 
-    pub async fn upsert(&mut self) -> Result<()> {
+    pub async fn insert(&mut self) -> Result<()> {
         // TODO: Add ID to insert
         let mut response = DB
             .query(format!(

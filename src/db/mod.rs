@@ -1,11 +1,10 @@
-use crate::db::{generic_object::GenericObject, table_id::TableId};
+use crate::db::generic_object::{GenericObject, TableId};
 use std::sync::LazyLock;
 use surrealdb::engine::local::{Db, Mem, RocksDb};
 use surrealdb::sql::{Array, Object as DbObject, Value};
 use surrealdb::{Result, Surreal};
 
 pub mod generic_object;
-mod table_id;
 
 pub static DB: LazyLock<Surreal<Db>> = LazyLock::new(|| Surreal::init());
 
