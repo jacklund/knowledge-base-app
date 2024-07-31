@@ -12,11 +12,15 @@ use signal_hook::{
     iterator::Signals,
 };
 use surrealdb::engine::local::{Db, Mem, RocksDb};
-use surrealdb::sql::{Array, Object as DbObject, Value};
+use surrealdb::sql::{Array, Id, Object as DbObject, Value};
 use surrealdb::Surreal;
 use tokio::net::TcpListener;
-use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::oneshot;
+
+use crate::db::generic_object::{AttributeValue, GenericObject};
+use crate::db::{open_db, parse_array, read_all, DB};
+
+mod db;
 
 // Dopey example schema
 struct Query;
@@ -33,32 +37,6 @@ async fn graphiql() -> impl IntoResponse {
     response::Html(GraphiQLSource::build().endpoint("/").finish())
 }
 
-// Open the DB
-async fn open_db() -> surrealdb::Result<Surreal<Db>> {
-    // let mut db_dir = data_local_dir().unwrap();
-    // db_dir.push("knowledge_repo");
-    // Surreal::new::<RocksDb>(db_dir).await
-    Surreal::new::<Mem>(()).await
-}
-
-fn parse_value(value: Value) -> DbObject {
-    match value {
-        Value::Object(object) => object,
-        _ => {
-            println!("Whoops: value = {:?}", value);
-            std::process::exit(1);
-        }
-    }
-}
-
-fn parse_array(array: Array) -> Vec<DbObject> {
-    if array.len() == 1 {
-        parse_array(array)
-    } else {
-        array.iter().map(|v| parse_value(v.clone())).collect()
-    }
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // An infinite stream of hangup signals.
@@ -72,22 +50,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // Open the DB
-    let db = open_db().await?;
-    db.use_ns("test").use_db("test").await?;
-    db.query("insert into person [{name: \"Jack\"}, {name: \"Fred\", age: 62}]")
+    open_db().await?;
+    let mut jack = GenericObject::new("person").add_string_attribute("name", "Jack");
+    jack.insert().await?;
+    let mut fred = GenericObject::new("person")
+        .add_string_attribute("name", "Fred")
+        .add_int_attribute("age", 62);
+    fred.insert().await?;
+    let objects = read_all("person").await?;
+    for object in objects {
+        println!("{:?}", object);
+    }
+    let mut book = GenericObject::new("book")
+        .add_string_attribute("name", "Fred's book")
+        .add_string_attribute("author", "Fred");
+    println!("book before = {:?}", book);
+    book.insert().await?;
+    println!("book after = {:?}", book);
+    DB.query("define field in on table wrote type record<person>")
+        .query("define field out on table wrote type record<book>")
         .await?;
-    let mut response = db.query("select * from person").await?;
-    let result: Value = response.take(0)?;
-    match result {
-        Value::Array(array) => {
-            for obj in parse_array(array).iter() {
-                for (key, value) in obj.iter() {
-                    println!("{}: {}", key, value);
-                }
-            }
+    let mut response = DB
+        .query("select id from person where name = \"Fred\"")
+        .await?;
+    match response.take::<Value>(0)?.first() {
+        Value::Object(object) => {
+            println!("id = {:?}", object.get("id").unwrap().clone().as_string())
         }
-        _ => println!("Whoops!, result = {:?}", result),
-    };
+        _ => unreachable!(),
+    }
 
     let schema = Schema::new(Query, EmptyMutation, EmptySubscription);
     let app = Router::new().route("/", get(graphiql).post_service(GraphQL::new(schema)));
