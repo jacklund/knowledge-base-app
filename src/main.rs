@@ -11,14 +11,12 @@ use signal_hook::{
     consts::{SIGHUP, SIGINT},
     iterator::Signals,
 };
-use surrealdb::engine::local::{Db, Mem, RocksDb};
-use surrealdb::sql::{Array, Id, Object as DbObject, Value};
-use surrealdb::Surreal;
+use surrealdb::sql::Value;
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 
-use crate::db::generic_object::{AttributeValue, GenericObject};
-use crate::db::{open_db, parse_array, read_all, DB};
+use crate::db::generic_object::GenericObject;
+use crate::db::{open_db, read_all, DB};
 
 mod db;
 
