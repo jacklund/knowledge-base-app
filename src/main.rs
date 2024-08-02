@@ -19,6 +19,7 @@ use crate::db::generic_object::GenericObject;
 use crate::db::{open_db, read_all, DB};
 
 mod db;
+mod schema;
 
 // Dopey example schema
 struct Query;
@@ -49,19 +50,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Open the DB
     open_db().await?;
-    let mut jack = GenericObject::new("person").add_string_attribute("name", "Jack");
+    let mut jack = GenericObject::new("person")
+        .await?
+        .add_string_attribute("name", "Jack")
+        .await?;
     jack.insert().await?;
     let mut fred = GenericObject::new("person")
+        .await?
         .add_string_attribute("name", "Fred")
-        .add_int_attribute("age", 62);
+        .await?
+        .add_int_attribute("age", 62)
+        .await?;
     fred.insert().await?;
     let objects = read_all("person").await?;
     for object in objects {
         println!("{:?}", object);
     }
     let mut book = GenericObject::new("book")
+        .await?
         .add_string_attribute("name", "Fred's book")
-        .add_string_attribute("author", "Fred");
+        .await?
+        .add_string_attribute("author", "Fred")
+        .await?;
     println!("book before = {:?}", book);
     book.insert().await?;
     println!("book after = {:?}", book);

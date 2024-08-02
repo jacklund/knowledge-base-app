@@ -1,11 +1,12 @@
 use crate::db::DB;
+use crate::schema::add_schema_attribute;
 use chrono::{DateTime, Utc};
 use std::fmt;
 use std::time::Duration;
 use surrealdb::sql::{Id, Number, Thing, Value};
 use surrealdb::Result;
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum AttributeValue {
     // Work around warnings due to Debug derive above
     #[allow(dead_code)]
@@ -55,7 +56,7 @@ impl From<Value> for AttributeValue {
                 Number::Float(num) => Self::Float(num),
                 Number::Decimal(_) => unreachable!(),
             },
-            Value::Strand(string) => Self::String(string.to_string()),
+            Value::Strand(strand) => Self::String(strand.as_string()),
             Value::Duration(dur) => Self::Duration(*dur),
             Value::Datetime(dt) => Self::DateTime(*dt),
             Value::Array(array) => Self::Array(array.iter().map(|v| v.clone().into()).collect()),
@@ -65,7 +66,7 @@ impl From<Value> for AttributeValue {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Attribute {
     key: String,
     value: AttributeValue,
@@ -81,7 +82,7 @@ impl Attribute {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq)]
 struct AttributeList {
     list: Vec<Attribute>,
 }
@@ -93,6 +94,13 @@ impl AttributeList {
 
     pub fn add(&mut self, attribute: Attribute) {
         self.list.push(attribute);
+    }
+
+    pub fn find(&self, key: &str) -> Option<AttributeValue> {
+        self.list
+            .iter()
+            .find(|&a| a.key == key)
+            .map(|a| a.value.clone())
     }
 
     fn to_db_string(&self) -> String {
@@ -110,10 +118,10 @@ impl AttributeList {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct TableId {
     table_name: String,
-    id: Option<String>,
+    id: Option<Id>,
 }
 
 impl TableId {
@@ -128,7 +136,7 @@ impl TableId {
         self.table_name.clone()
     }
 
-    pub fn id(&self) -> Option<String> {
+    pub fn id(&self) -> Option<Id> {
         self.id.clone()
     }
 }
@@ -146,26 +154,23 @@ impl From<Thing> for TableId {
     fn from(thing: Thing) -> Self {
         Self {
             table_name: thing.tb,
-            id: match thing.id {
-                Id::String(id) => Some(id),
-                _ => unreachable!(),
-            },
+            id: Some(thing.id),
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct GenericObject {
     id: TableId,
     attributes: AttributeList,
 }
 
 impl GenericObject {
-    pub fn new(type_name: &str) -> GenericObject {
-        Self {
+    pub async fn new(type_name: &str) -> Result<GenericObject> {
+        Ok(Self {
             id: TableId::new(type_name),
             attributes: AttributeList::default(),
-        }
+        })
     }
 
     pub fn set_table_id(&mut self, id: TableId) {
@@ -182,16 +187,31 @@ impl GenericObject {
         self
     }
 
-    pub fn add_kv_attribute(self, key: &str, value: AttributeValue) -> GenericObject {
-        self.add_attribute(Attribute::new(key.to_string(), value))
+    pub async fn add_kv_attribute(self, key: &str, value: AttributeValue) -> Result<GenericObject> {
+        add_schema_attribute(&self.id.table_name(), key, false).await?;
+        Ok(self.add_attribute(Attribute::new(key.to_string(), value)))
     }
 
-    pub fn add_string_attribute(self, key: &str, value: &str) -> GenericObject {
+    pub async fn add_string_attribute(self, key: &str, value: &str) -> Result<GenericObject> {
         self.add_kv_attribute(key, AttributeValue::String(value.to_string()))
+            .await
     }
 
-    pub fn add_int_attribute(self, key: &str, value: i64) -> GenericObject {
-        self.add_kv_attribute(key, AttributeValue::Int(value))
+    pub async fn add_int_attribute(self, key: &str, value: i64) -> Result<GenericObject> {
+        self.add_kv_attribute(key, AttributeValue::Int(value)).await
+    }
+
+    pub fn get_string_attribute(&self, key: &str) -> Option<String> {
+        let value = self.attributes.find(key);
+        if value.is_some() {
+            if let AttributeValue::String(string) = value.unwrap() {
+                Some(string)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
     }
 
     pub async fn insert(&mut self) -> Result<()> {

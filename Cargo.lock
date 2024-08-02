@@ -3651,6 +3651,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-tungstenite 0.20.1",
+ "tokio-util",
  "tracing",
  "trice",
  "url",
