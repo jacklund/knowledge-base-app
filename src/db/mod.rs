@@ -1,6 +1,6 @@
 use crate::error::Result;
 use crate::object::Object;
-use crate::schema::Schema;
+use crate::object_type::ObjectType;
 use std::sync::LazyLock;
 use surrealdb::engine::any::Any;
 use surrealdb::engine::local::{Db, Mem, RocksDb};
@@ -8,8 +8,8 @@ use surrealdb::engine::local::{Db, Mem, RocksDb};
 use surrealdb::sql::{Array, Object as DbObject, Value};
 use surrealdb::Surreal;
 
-// pub static DB: LazyLock<Surreal<Db>> = LazyLock::new(|| Surreal::init());
-pub static DB: LazyLock<Surreal<Any>> = LazyLock::new(|| Surreal::init());
+pub static DB: LazyLock<Surreal<Db>> = LazyLock::new(|| Surreal::init());
+// pub static DB: LazyLock<Surreal<Any>> = LazyLock::new(|| Surreal::init());
 
 // Open the DB
 pub async fn open_db() -> Result<()> {
@@ -23,8 +23,8 @@ pub async fn open_db() -> Result<()> {
 
 // Open the DB
 pub async fn open_test_db() -> Result<()> {
-    // DB.connect::<Mem>(()).await?;
-    DB.connect("http://localhost:8000").await?;
+    DB.connect::<Mem>(()).await?;
+    // DB.connect("http://localhost:8000").await?;
     DB.use_ns("test").use_db("test").await?;
     Ok(())
 }
@@ -44,8 +44,8 @@ pub fn parse_array(array: Array) -> Vec<DbObject> {
 
 /// Read all rows in a table
 pub async fn read_all(table: &str) -> Result<Vec<Object>> {
-    // Get a copy of the schema for the object
-    let schema = Schema::get_schema_required(table).await?;
+    // Get a copy of the type for the object
+    let object_type = ObjectType::get_object_type_required(table).await?;
 
     // Since we're reading a generic object, we need to parse
     // it into the object ourselves
@@ -59,8 +59,8 @@ pub async fn read_all(table: &str) -> Result<Vec<Object>> {
             for obj in parse_array(array).iter_mut() {
                 let mut object = Object::new(table).await?;
 
-                // Load the attributes in the same order as in the schema
-                for attr in schema.attributes() {
+                // Load the attributes in the same order as in the object_type
+                for attr in object_type.attributes() {
                     if let Some((key, value)) = obj.iter().find(|(k, _)| **k == attr.name()) {
                         object = object
                             .add_attribute(key, &value.clone().as_raw_string())
@@ -79,31 +79,31 @@ pub async fn read_all(table: &str) -> Result<Vec<Object>> {
 mod tests {
     use super::*;
     use crate::error::Result;
-    use crate::schema::{Schema, SchemaAttribute};
+    use crate::object_type::{ObjectType, ObjectTypeAttribute};
     use surrealdb::sql::Kind;
 
     #[tokio::test]
     async fn test_insert() -> Result<()> {
         open_test_db().await?;
-        let mut schema = Schema::new("person");
-        schema
-            .add_attribute(SchemaAttribute::new("name", Kind::String, true))
+        let mut object_type = ObjectType::new("person");
+        object_type
+            .add_attribute(ObjectTypeAttribute::new("name", Kind::String, true))
             .await?;
-        schema
-            .add_attribute(SchemaAttribute::new("age", Kind::Int, false))
+        object_type
+            .add_attribute(ObjectTypeAttribute::new("age", Kind::Int, false))
             .await?;
         let mut jack = Object::new("person")
             .await?
             .add_attribute("name", "Jack")
             .await?;
-        jack.insert(Some(schema.clone())).await?;
+        jack.insert(Some(object_type.clone())).await?;
         let mut fred = Object::new("person")
             .await?
             .add_attribute("name", "Fred")
             .await?
             .add_attribute("age", "62")
             .await?;
-        fred.insert(Some(schema)).await?;
+        fred.insert(Some(object_type)).await?;
         let objects = read_all("person").await?;
         for object in objects {
             if object.get_attribute("name").unwrap() == "Jack" {

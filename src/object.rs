@@ -1,6 +1,6 @@
 use crate::db::DB;
 use crate::error::Result;
-use crate::schema::Schema;
+use crate::object_type::ObjectType;
 use crate::tag::Tag;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -21,14 +21,14 @@ impl Object {
             attributes: HashMap::new(),
             tags: Vec::new(),
         };
-        Schema::get_schema_required(type_name).await?;
+        ObjectType::get_object_type_required(type_name).await?;
         Ok(object)
     }
 
     pub async fn add_attribute(mut self, name: &str, value: &str) -> Result<Object> {
-        let schema = Schema::get_schema_required(&self.type_name).await?;
+        let object_type = ObjectType::get_object_type_required(&self.type_name).await?;
 
-        if !schema.has_attribute(name) {
+        if !object_type.has_attribute(name) {
             return Err(
                 format!("Unknown attribute '{}' for type '{}'", name, self.type_name).into(),
             );
@@ -41,13 +41,13 @@ impl Object {
         self.attributes.get(key)
     }
 
-    pub async fn insert(&mut self, schema: Option<Schema>) -> Result<()> {
-        let schema = match schema {
-            Some(schema) => schema,
-            None => Schema::get_schema_required(&self.type_name).await?,
+    pub async fn insert(&mut self, object_type: Option<ObjectType>) -> Result<()> {
+        let object_type = match object_type {
+            Some(object_type) => object_type,
+            None => ObjectType::get_object_type_required(&self.type_name).await?,
         };
         // TODO: Add ID to insert
-        let id_parts: Vec<String> = schema
+        let id_parts: Vec<String> = object_type
             .attributes()
             .iter()
             .filter_map(|a| {
@@ -66,7 +66,7 @@ impl Object {
             }
         }
         let id = parts.join(":");
-        let mut fields = schema
+        let mut fields = object_type
             .attributes()
             .iter()
             .filter_map(|a| match self.attributes.get(a.name()) {
@@ -76,7 +76,7 @@ impl Object {
             .collect::<VecDeque<String>>();
         fields.push_front(String::from("id"));
         let field_names: String = fields.iter().join(", ");
-        let mut values = schema
+        let mut values = object_type
             .attributes()
             .iter()
             .filter_map(|a| match self.attributes.get(a.name()) {

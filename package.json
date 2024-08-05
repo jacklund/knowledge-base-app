@@ -7,10 +7,15 @@
   "license": "MIT",
   "packageManager": "yarn@4.3.1",
   "devDependencies": {
-    "electron": "^31.3.0"
+    "@graphql-cli/diff": "2.1.0",
+    "@graphql-cli/similar": "2.1.0",
+    "electron": "^31.3.0",
+    "graphql-cli": "4.1.0"
   },
   "scripts": {
     "start": "electron .",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "graphql:diff": "graphql diff",
+    "graphql:similar": "graphql similar"
   }
 }
