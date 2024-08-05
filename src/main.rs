@@ -15,11 +15,14 @@ use surrealdb::sql::Value;
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 
-use crate::db::generic_object::GenericObject;
 use crate::db::{open_db, read_all, DB};
+use crate::object::Object;
 
 mod db;
+mod error;
+mod object;
 mod schema;
+mod tag;
 
 // Dopey example schema
 struct Query;
@@ -47,46 +50,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         signals.forever();
         let _ = tx.send(());
     });
-
-    // Open the DB
-    open_db().await?;
-    let mut jack = GenericObject::new("person")
-        .await?
-        .add_string_attribute("name", "Jack")
-        .await?;
-    jack.insert().await?;
-    let mut fred = GenericObject::new("person")
-        .await?
-        .add_string_attribute("name", "Fred")
-        .await?
-        .add_int_attribute("age", 62)
-        .await?;
-    fred.insert().await?;
-    let objects = read_all("person").await?;
-    for object in objects {
-        println!("{:?}", object);
-    }
-    let mut book = GenericObject::new("book")
-        .await?
-        .add_string_attribute("name", "Fred's book")
-        .await?
-        .add_string_attribute("author", "Fred")
-        .await?;
-    println!("book before = {:?}", book);
-    book.insert().await?;
-    println!("book after = {:?}", book);
-    DB.query("define field in on table wrote type record<person>")
-        .query("define field out on table wrote type record<book>")
-        .await?;
-    let mut response = DB
-        .query("select id from person where name = \"Fred\"")
-        .await?;
-    match response.take::<Value>(0)?.first() {
-        Value::Object(object) => {
-            println!("id = {:?}", object.get("id").unwrap().clone().as_string())
-        }
-        _ => unreachable!(),
-    }
 
     let schema = Schema::new(Query, EmptyMutation, EmptySubscription);
     let app = Router::new().route("/", get(graphiql).post_service(GraphQL::new(schema)));
