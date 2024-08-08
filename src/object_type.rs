@@ -1,5 +1,6 @@
 use crate::db::DB;
 use crate::error::Result;
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use surrealdb::sql::Kind;
 
@@ -7,22 +8,13 @@ static OBJECT_TYPE_TABLE: &str = "_object_type";
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct ObjectTypeAttribute {
-    name: String,
-    datatype: Kind,
-    id: bool,
+    pub(crate) datatype: Kind,
+    pub(crate) id: bool,
 }
 
 impl ObjectTypeAttribute {
-    pub fn new(name: &str, datatype: Kind, id: bool) -> Self {
-        Self {
-            name: name.to_string(),
-            datatype,
-            id,
-        }
-    }
-
-    pub fn name(&self) -> &str {
-        &self.name
+    pub fn new(datatype: Kind, id: bool) -> Self {
+        Self { datatype, id }
     }
 
     pub fn datatype(&self) -> &Kind {
@@ -36,8 +28,8 @@ impl ObjectTypeAttribute {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct ObjectType {
-    type_name: String,
-    attributes: Vec<ObjectTypeAttribute>,
+    pub(crate) type_name: String,
+    pub(crate) attributes: IndexMap<String, ObjectTypeAttribute>,
     id_parts: Vec<String>,
 }
 
@@ -45,7 +37,7 @@ impl ObjectType {
     pub fn new(type_name: &str) -> Self {
         Self {
             type_name: type_name.to_string(),
-            attributes: Vec::new(),
+            attributes: IndexMap::new(),
             id_parts: Vec::new(),
         }
     }
@@ -66,27 +58,31 @@ impl ObjectType {
     }
 
     pub fn has_attribute(&self, name: &str) -> bool {
-        self.attributes.iter().find(|a| a.name() == name).is_some()
+        self.attributes.contains_key(name)
     }
 
-    pub async fn add_attribute(&mut self, attribute: ObjectTypeAttribute) -> Result<()> {
-        if !self.attributes.contains(&attribute) {
-            if attribute.is_id_part() {
-                self.id_parts.push(attribute.name().to_string());
+    pub async fn add_attribute(
+        &mut self,
+        name: &str,
+        datatype: Kind,
+        is_id_part: bool,
+    ) -> Result<()> {
+        if !self.attributes.contains_key(name) {
+            if is_id_part {
+                self.id_parts.push(name.to_string());
             }
-            self.attributes.push(attribute);
+            self.attributes.insert(
+                name.to_string(),
+                ObjectTypeAttribute::new(datatype, is_id_part),
+            );
             self.update().await?;
         }
         Ok(())
     }
 
     pub async fn remove_attribute(&mut self, attribute_name: &str) -> Result<()> {
-        if let Some(index) = self
-            .attributes
-            .iter()
-            .position(|a| a.name() == attribute_name)
-        {
-            let attribute = self.attributes.remove(index);
+        if self.attributes.contains_key(attribute_name) {
+            let attribute = self.attributes.swap_remove(attribute_name).unwrap();
             if attribute.is_id_part() {
                 // TODO: Figure out how to handle ID changing in table
                 unreachable!()
@@ -96,7 +92,7 @@ impl ObjectType {
         Ok(())
     }
 
-    pub fn attributes(&self) -> &Vec<ObjectTypeAttribute> {
+    pub fn attributes(&self) -> &IndexMap<String, ObjectTypeAttribute> {
         &self.attributes
     }
 

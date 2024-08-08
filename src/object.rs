@@ -2,15 +2,15 @@ use crate::db::DB;
 use crate::error::Result;
 use crate::object_type::ObjectType;
 use crate::tag::Tag;
+use indexmap::IndexMap;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, VecDeque};
-use surrealdb::sql::{Kind, Value};
+use std::collections::VecDeque;
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub struct Object {
     type_name: String,
-    attributes: HashMap<String, String>,
+    attributes: IndexMap<String, String>,
     tags: Vec<Tag>,
 }
 
@@ -18,7 +18,7 @@ impl Object {
     pub async fn new(type_name: &str) -> Result<Object> {
         let object = Self {
             type_name: type_name.to_string(),
-            attributes: HashMap::new(),
+            attributes: IndexMap::new(),
             tags: Vec::new(),
         };
         ObjectType::get_object_type_required(type_name).await?;
@@ -50,9 +50,9 @@ impl Object {
         let id_parts: Vec<String> = object_type
             .attributes()
             .iter()
-            .filter_map(|a| {
+            .filter_map(|(k, a)| {
                 if a.is_id_part() {
-                    Some(a.name().to_string())
+                    Some(k.to_string())
                 } else {
                     None
                 }
@@ -69,8 +69,8 @@ impl Object {
         let mut fields = object_type
             .attributes()
             .iter()
-            .filter_map(|a| match self.attributes.get(a.name()) {
-                Some(_) => Some(a.name().to_string()),
+            .filter_map(|(k, _a)| match self.attributes.get(k) {
+                Some(_) => Some(k.to_string()),
                 None => None,
             })
             .collect::<VecDeque<String>>();
@@ -79,7 +79,7 @@ impl Object {
         let mut values = object_type
             .attributes()
             .iter()
-            .filter_map(|a| match self.attributes.get(a.name()) {
+            .filter_map(|(k, a)| match self.attributes.get(k) {
                 Some(value) => Some((a.datatype().clone(), value.clone())),
                 None => None,
             })
