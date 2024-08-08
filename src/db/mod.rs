@@ -8,8 +8,8 @@ use surrealdb::engine::remote::ws::Ws;
 use surrealdb::sql::{Array, Object as DbObject, Value};
 use surrealdb::Surreal;
 
-// pub static DB: LazyLock<Surreal<Db>> = LazyLock::new(|| Surreal::init());
-pub static DB: LazyLock<Surreal<Any>> = LazyLock::new(|| Surreal::init());
+pub static DB: LazyLock<Surreal<Db>> = LazyLock::new(|| Surreal::init());
+// pub static DB: LazyLock<Surreal<Any>> = LazyLock::new(|| Surreal::init());
 
 // Open the DB
 pub async fn open_db() -> Result<()> {
@@ -23,8 +23,8 @@ pub async fn open_db() -> Result<()> {
 
 // Open the DB
 pub async fn open_test_db() -> Result<()> {
-    // DB.connect::<Mem>(()).await?;
-    DB.connect("http://localhost:8000").await?;
+    DB.connect::<Mem>(()).await?;
+    // DB.connect("http://localhost:8000").await?;
     DB.use_ns("test").use_db("test").await?;
     Ok(())
 }
